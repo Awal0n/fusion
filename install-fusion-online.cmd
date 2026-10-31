@@ -100,8 +100,8 @@ echo.
 echo Installing FusionInventory Agent...
 echo.
 
-rem Keep /server unquoted: FusionInventory Agent 2.6 misparses a quoted server URL.
-start "" /wait "%INSTALLER_PATH%" /S /acceptlicense /server=%SERVER_URL% /tag=%TAG%
+rem Quote the URL in single quotes; the NSIS parser otherwise splits at URL slashes.
+start "" /wait "%INSTALLER_PATH%" /S /acceptlicense /server='%SERVER_URL%' /tag=%TAG%
 set "INSTALLER_EXIT=%ERRORLEVEL%"
 
 del /q "%INSTALLER_PATH%" >nul 2>&1
