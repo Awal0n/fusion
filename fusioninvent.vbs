@@ -288,52 +288,70 @@ End Function
 Function SaveWebBinary(strSetupLocation, strSetup)
    Const adTypeBinary = 1
    Const adSaveCreateOverWrite = 2
-   Const ForWriting = 2
-   Dim web, varByteArray, strData, strBuffer, lngCounter, ado, strUrl
+   Dim web, varByteArray, ado, strUrl, strTargetPath
    strUrl = strSetupLocation & "/" & strSetup
-   'On Error Resume Next
-   'Download the file with any available object
+   strTargetPath = WshShell.ExpandEnvironmentStrings("%TEMP%") & "\" & strSetup
+
+   'Download the installer and report COM or network errors to the caller.
+   On Error Resume Next
    Err.Clear
-   Set web = Nothing
    Set web = CreateObject("WinHttp.WinHttpRequest.5.1")
-   If web Is Nothing Then Set web = CreateObject("WinHttp.WinHttpRequest")
-   If web Is Nothing Then Set web = CreateObject("MSXML2.ServerXMLHTTP")
-   If web Is Nothing Then Set web = CreateObject("Microsoft.XMLHTTP")
-   web.Open "GET", strURL, False
+   If Err.Number <> 0 Then
+      Err.Clear
+      Set web = CreateObject("WinHttp.WinHttpRequest")
+   End If
+   If Err.Number <> 0 Then
+      Err.Clear
+      Set web = CreateObject("MSXML2.ServerXMLHTTP")
+   End If
+   If Err.Number <> 0 Then
+      Err.Clear
+      Set web = CreateObject("Microsoft.XMLHTTP")
+   End If
+   If Err.Number <> 0 Or web Is Nothing Then
+      SaveWebBinary = False
+      Exit Function
+   End If
+
+   web.Open "GET", strUrl, False
    web.Send
    If Err.Number <> 0 Then
       SaveWebBinary = False
       Set web = Nothing
       Exit Function
    End If
-   If web.Status <> "200" Then
+   If web.Status <> 200 Then
       SaveWebBinary = False
       Set web = Nothing
       Exit Function
    End If
    varByteArray = web.ResponseBody
    Set web = Nothing
-   'Now save the file with any available method
-   On Error Resume Next
-   Set ado = Nothing
-   Set ado = CreateObject("ADODB.Stream")
-   If ado Is Nothing Then
-      Set fs = CreateObject("Scripting.FileSystemObject")
-      Set ts = fs.OpenTextFile(baseName(strUrl), ForWriting, True)
-      strData = ""
-      strBuffer = ""
-      For lngCounter = 0 to UBound(varByteArray)
-         ts.Write Chr(255 And Ascb(Midb(varByteArray,lngCounter + 1, 1)))
-      Next
-      ts.Close
-   Else
-      ado.Type = adTypeBinary
-      ado.Open
-      ado.Write varByteArray
-      ado.SaveToFile CreateObject("WScript.Shell").ExpandEnvironmentStrings("%TEMP%") & "\" & strSetup, adSaveCreateOverWrite
-      ado.Close
+   If Err.Number <> 0 Then
+      SaveWebBinary = False
+      Exit Function
    End If
-   SaveWebBinary = True
+
+   'ADODB.Stream preserves installer bytes; a text stream can corrupt binary data.
+   Err.Clear
+   Set ado = CreateObject("ADODB.Stream")
+   If Err.Number <> 0 Or ado Is Nothing Then
+      SaveWebBinary = False
+      Exit Function
+   End If
+   ado.Type = adTypeBinary
+   ado.Open
+   ado.Write varByteArray
+   ado.SaveToFile strTargetPath, adSaveCreateOverWrite
+   If Err.Number <> 0 Then
+      SaveWebBinary = False
+      ado.Close
+      Set ado = Nothing
+      Exit Function
+   End If
+   ado.Close
+   Set ado = Nothing
+   SaveWebBinary = (Err.Number = 0)
 End Function
 
 Function ShowMessage(strMessage)
@@ -348,7 +366,7 @@ End Function
 '
 '
 
-Dim nMinutesToAdvance, strCmd, strSystemArchitecture, strTempDir, WshShell, objFSO
+Dim nMinutesToAdvance, strCmd, strSystemArchitecture, strTempDir, WshShell, objFSO, installerExitCode
 Set WshShell = WScript.CreateObject("WScript.shell")
 
 nMinutesToAdvance = 5
@@ -401,7 +419,17 @@ If IsSelectedForce() Or IsInstallationNeeded(SetupVersion, SetupArchitecture, st
          strCmd = WshShell.ExpandEnvironmentStrings("%ComSpec%")
          strTempDir = WshShell.ExpandEnvironmentStrings("%TEMP%")
          ShowMessage("Running: """ & strTempDir & "\" & Setup & """ " & SetupOptions)
-         WshShell.Run """" & strTempDir & "\" & Setup & """ " & SetupOptions, 0, True
+         On Error Resume Next
+         Err.Clear
+         installerExitCode = WshShell.Run("""" & strTempDir & "\" & Setup & """" & " " & SetupOptions, 0, True)
+         If Err.Number <> 0 Then
+            ShowMessage("Error starting installer: " & Err.Description)
+            WScript.Quit 5
+         End If
+         If installerExitCode <> 0 Then
+            ShowMessage("Installer failed with exit code " & installerExitCode & ".")
+            WScript.Quit installerExitCode
+         End If
          ShowMessage("Scheduling: DEL /Q /F """ & strTempDir & "\" & Setup & """")
          WshShell.Run "AT.EXE " & AdvanceTime(nMinutesToAdvance) & " " & strCmd & " /C ""DEL /Q /F """"" & strTempDir & "\" & Setup & """""", 0, True
          ShowMessage("Deployment done!")
@@ -412,9 +440,26 @@ If IsSelectedForce() Or IsInstallationNeeded(SetupVersion, SetupArchitecture, st
       Set objFSO = CreateObject("Scripting.FileSystemObject")
       strTempDir = WshShell.ExpandEnvironmentStrings("%TEMP%")
       ShowMessage("Copying: " & SetupLocation & "\" & Setup & " to " & strTempDir & "\" & Setup)
-      objFSO.CopyFile SetupLocation & "\" & Setup, strTempDir & "\" & Setup, true
+      On Error Resume Next
+      Err.Clear
+      objFSO.CopyFile SetupLocation & "\" & Setup, strTempDir & "\" & Setup, True
+      If Err.Number <> 0 Then
+         ShowMessage("Error copying installer: " & Err.Description)
+         WScript.Quit 4
+      End If
+      On Error GoTo 0
       ShowMessage("Running: """ & strTempDir & "\" & Setup & """ " & SetupOptions)
-      WshShell.Run "CMD.EXE /C """ & strTempDir & "\" & Setup & """ " & SetupOptions, 0, True
+      On Error Resume Next
+      Err.Clear
+      installerExitCode = WshShell.Run("""" & strTempDir & "\" & Setup & """" & " " & SetupOptions, 0, True)
+      If Err.Number <> 0 Then
+         ShowMessage("Error starting installer: " & Err.Description)
+         WScript.Quit 5
+      End If
+      If installerExitCode <> 0 Then
+         ShowMessage("Installer failed with exit code " & installerExitCode & ".")
+         WScript.Quit installerExitCode
+      End If
       ShowMessage("Deployment done!")
    End If
 Else
