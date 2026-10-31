@@ -21,20 +21,22 @@ echo ============================================
 echo.
 echo Computer: %COMPUTER_NAME%
 echo.
-echo Select company:
+echo Select company or enter a tag:
 echo.
+echo 0 - Enter tag manually
 echo 1 - drHug
 echo 2 - monblan
 echo 3 - geo
 echo 4 - fs
 echo 5 - amvet
 echo.
-choice /c 12345 /n /m "Enter number: "
-if errorlevel 5 goto :company_amvet
-if errorlevel 4 goto :company_fs
-if errorlevel 3 goto :company_geo
-if errorlevel 2 goto :company_monblan
-if errorlevel 1 goto :company_drHug
+choice /c 012345 /n /m "Enter number: "
+if errorlevel 6 goto :company_amvet
+if errorlevel 5 goto :company_fs
+if errorlevel 4 goto :company_geo
+if errorlevel 3 goto :company_monblan
+if errorlevel 2 goto :company_drHug
+if errorlevel 1 goto :manual_tag
 goto :invalid_selection
 
 :company_drHug
@@ -59,6 +61,16 @@ goto :company_selected
 
 :company_selected
 set "TAG=%ROOT_TAG%%COMPUTER_NAME%"
+goto :tag_selected
+
+:manual_tag
+set "TAG="
+set /p "TAG=Enter full tag (letters, numbers, dot, underscore, hyphen): "
+if not defined TAG goto :invalid_manual_tag
+powershell.exe -NoLogo -NoProfile -NonInteractive -Command "if ($env:TAG -cmatch '^[A-Za-z0-9._-]{1,128}$') { exit 0 } else { exit 1 }"
+if errorlevel 1 goto :invalid_manual_tag
+
+:tag_selected
 echo.
 echo Tag: %TAG%
 echo.
@@ -69,7 +81,7 @@ goto :cancelled
 
 :download
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
-if errorlevel 1 goto :download_failed
+if not exist "%INSTALL_DIR%" goto :download_failed
 
 echo.
 echo Downloading FusionInventory Agent...
@@ -118,6 +130,12 @@ exit /b 0
 :invalid_selection
 echo.
 echo Invalid selection.
+pause
+exit /b 1
+
+:invalid_manual_tag
+echo.
+echo Invalid tag. Use 1-128 letters, numbers, dot, underscore, or hyphen.
 pause
 exit /b 1
 
