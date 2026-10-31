@@ -290,7 +290,7 @@ Function SaveWebBinary(strSetupLocation, strSetup)
    Const adSaveCreateOverWrite = 2
    Dim web, varByteArray, ado, strUrl, strTargetPath
    strUrl = strSetupLocation & "/" & strSetup
-   strTargetPath = CreateObject("WScript.Shell").ExpandEnvironmentStrings("%TEMP%") & "\" & strSetup
+   strTargetPath = WshShell.ExpandEnvironmentStrings("%TEMP%") & "\" & strSetup
 
    'Download the installer and report COM or network errors to the caller.
    On Error Resume Next
