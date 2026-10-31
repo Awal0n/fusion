@@ -2,7 +2,7 @@
 setlocal EnableExtensions DisableDelayedExpansion
 
 rem Configuration copied from install-fusion-online.ps1
-set "INSTALLER_URL=https://glpi2.loadrom.ru/downloads/fusioninventory-agent_windows-x64_2.6.exe"
+set "INSTALLER_URL=https://github.com/fusioninventory/fusioninventory-agent/releases/download/2.6/fusioninventory-agent_windows-x64_2.6.exe"
 set "SERVER_URL=https://glpi2.loadrom.ru:33336/plugins/fusioninventory/"
 set "INSTALLER_NAME=fusioninventory-agent_windows-x64_2.6.exe"
 set "INSTALL_DIR=%TEMP%\FusionInventoryInstall"
@@ -29,8 +29,10 @@ echo 2 - monblan
 echo 3 - geo
 echo 4 - fs
 echo 5 - amvet
+echo 6 - vivet
 echo.
-choice /c 012345 /n /m "Enter number: "
+choice /c 0123456 /n /m "Enter number: "
+if errorlevel 7 goto :company_vivet
 if errorlevel 6 goto :company_amvet
 if errorlevel 5 goto :company_fs
 if errorlevel 4 goto :company_geo
@@ -57,6 +59,10 @@ goto :company_selected
 
 :company_amvet
 set "ROOT_TAG=amvet_"
+goto :company_selected
+
+:company_vivet
+set "ROOT_TAG=vivet_"
 goto :company_selected
 
 :company_selected
